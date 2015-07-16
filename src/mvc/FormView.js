@@ -7,8 +7,7 @@
  */
 define(
     function (require) {
-        require('../ui/DrawerActionPanel');
-
+        var eoo = require('eoo');
         var u = require('../util');
 
         var Validity = require('esui/validator/Validity');
@@ -280,56 +279,65 @@ define(
         };
 
         /**
-         * 用户处理弹出抽屉的事件Handle
+         * 用户打开新页面的操作
          *
          * @protected
-         * @method mvc.FormView#popDrawerActionPanel
+         * @method mvc.FormView#openPage
          * @param {mini-event.Event} e 事件参数
          */
-        exports.popDrawerActionPanel = function (e) {
+        exports.openPage = function (e) {
             e.preventDefault();
             e.stopPropagation();
             var url = e.target.get('href') + '';
             var targetId = e.target.get('id');
 
-            // 传给 ActionPanel 的 url 是不能带 hash 符号的
+            // url 不能带 hash 符号
             if (url.charAt(0) === '#') {
                 url = url.slice(1);
             }
-            this.popDrawerAction({url: url}, targetId).show();
+            var opener = this.getInnerPageOpener();
+            this.forwardTo(opener, {url: url, targetId: targetId});
         };
 
         /**
-         * @override
+         * 跳转新建页面
+         *
+         * @method mvc.ListView#forwardTo
+         * @param {mvc.handler.PageOpener} opener 页面打开组件
+         * @param {Object} options 参数
          */
-        exports.popDrawerAction = function (options, targetId) {
-            var drawerActionPanel = this.$super(arguments);
-
-            drawerActionPanel.on('close', saveAndClose, this);
-            drawerActionPanel.on(
-                'action@entitysave',
-                function (e) {
-                    saveRelatedEntity.call(this, e, targetId);
-                },
-                this
-            );
-            drawerActionPanel.on('action@handlefinish', handleAfterRelatedEntitySaved, this);
-            drawerActionPanel.on('action@submitcancel', cancel);
-            drawerActionPanel.on('action@back', back, this);
-
-            return drawerActionPanel;
+        exports.forwardTo = function (opener, options) {
+            var url = options.url;
+            options.viewContext = this.viewContext;
+            opener.forwardTo(url, options);
+            opener.on('close', closeInnerPage);
+            var container = opener.getContainer();
+            if (container) {
+                // 内嵌页内表单提交启动，阻止默认提交处理行为
+                container.on(
+                    'action@entitysave',
+                    function (e) {
+                        saveRelatedEntity.call(this, e, options.targetId);
+                    },
+                    this
+                );
+                // 提交完成
+                container.on('action@handlefinish', handleAfterRelatedEntitySaved, opener);
+                // 提交取消
+                container.on('action@submitcancel', cancelRelatedEntitySaved, opener);
+                container.on('action@back', backFromOpenedPage, opener);
+            }
         };
 
         /**
-         * 返回并告诉上层保留数据并退出
+         * 关闭内嵌页
          *
          * @event
-         * @fires mvc.FormView#saveandclose
+         * @fires mvc.FormView#leaveinnerpage
          * @param {mini-event.Event} e 事件参数
          */
-        function saveAndClose(e) {
-            e.target.hide();
-            this.fire('saveandclose');
+        function closeInnerPage(e) {
+            this.fire('closeinnerpage');
         }
 
         /**
@@ -346,7 +354,7 @@ define(
         }
 
         /**
-         * 处理抽屉内提交的Action的接口
+         * 处理内嵌页提交的Action的接口
          *
          * @protected
          * @method mvc.FormView#handleAfterRelatedEntitySaved
@@ -357,25 +365,25 @@ define(
         };
 
         /**
-         * 抽屉内Action处理完毕后的事件处理句柄
+         * 内嵌页内Action处理完毕后的事件处理句柄
          *
          * @event
          * @param {mini-event.Event} e 事件参数
          */
         function handleAfterRelatedEntitySaved(e) {
-            e.target.hide();
-            e.target.dispose();
+            this.leave();
         }
 
         /**
-         * 取消
+         * 取消内嵌页提交
          *
          * @event
          * @param {mini-event.Event} e 事件参数
          */
-        function cancel(e) {
+        function cancelRelatedEntitySaved(e) {
             e.preventDefault();
-            this.dispose();
+            // 离开内嵌页
+            this.leave();
         }
 
         /**
@@ -384,11 +392,15 @@ define(
          * @event
          * @param {mini-event.Event} e 事件参数
          */
-        function back(e) {
+        function backFromOpenedPage(e) {
             e.stopPropagation();
             e.preventDefault();
-            e.target.hide();
+            // 关闭
+            this.close();
         }
+
+        /** 内嵌表单页 */
+        eoo.defineAccessor(exports, 'innerPageOpener');
 
         var BaseView = require('./BaseView');
         var FormView = require('eoo').create(BaseView, exports);

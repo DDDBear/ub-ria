@@ -7,8 +7,7 @@
  */
 define(
     function (require) {
-        require('../ui/DrawerActionPanel');
-
+        var eoo = require('eoo');
         var u = require('../util');
 
         /**
@@ -50,7 +49,7 @@ define(
                 'filter-cancel:click': cancelFilter,
                 'filter-modify:click': toggleFilterPanelContent,
                 'table:command': 'commandHandler',
-                'create:click': popDrawerActionPanel
+                'create:click': 'openCreatePage'
             };
             /* eslint-enable fecs-camelcase */
             this.addUIEvents(uiEvents);
@@ -278,9 +277,8 @@ define(
                 else if (e.name === 'modify' || e.name === 'read' || e.name === 'copy') {
                     var id = e.args;
                     var url = getActionURL.call(this, e.name, id);
-                    var options = {url: url};
-
-                    this.popDrawerAction(options).show();
+                    var opener = this.getCommandPageOpener();
+                    this.forwardTo(opener, url);
                 }
             }
         };
@@ -431,36 +429,44 @@ define(
         };
 
         /**
-         * 弹出drawerActionPanel
+         * 新建按钮的打开新建页面
          *
          * @event
+         * @method mvc.ListView#openCreatePage
          * @param {mini-event.Event} e 事件参数
          */
-        function popDrawerActionPanel(e) {
+        exports.openCreatePage = function (e) {
             e.stopPropagation();
             e.preventDefault();
             var url = String(e.target.get('href'));
 
-            // 传给 ActionPanel 的 url 是不能带 hash 符号的。。
+            // url 不能带 hash 符号
             if (url.charAt(0) === '#') {
                 url = url.slice(1);
             }
-            this.popDrawerAction({url: url}).show();
-        }
+            var opener = this.getCreatePageOpener();
+            this.forwardTo(opener, url);
+        };
 
         /**
-         * @override
+         * 跳转新建页面
+         *
+         * @method mvc.ListView#forwardTo
+         * @param {mvc.handler.PageOpener} opener 页面打开组件
+         * @param {string} url 页面地址
          */
-        exports.popDrawerAction = function (options) {
-            var drawerActionPanel = this.$super(arguments);
-
-            drawerActionPanel.on('action@submitcancel', cancel);
-            drawerActionPanel.on('action@back', back);
-            drawerActionPanel.on('action@saveandclose', saveAndClose);
-            drawerActionPanel.on('close', closeDrawerActionPanel, this);
-
-            return drawerActionPanel;
+        exports.forwardTo = function (opener, url) {
+            opener.forwardTo(url, {viewContext: this.viewContext});
+            opener.on('close', closeOpenedPage);
+            var container = opener.getContainer();
+            if (container) {
+                // 提交取消
+                container.on('action@submitcancel', cancelSubmit);
+                container.on('action@back', backFromOpenedPage, this);
+                container.on('action@closeinnerpage', closeOpenedPage);
+            }
         };
+
 
         /**
          * 取消
@@ -468,7 +474,7 @@ define(
          * @event
          * @param {mini-event.Event} e 事件参数
          */
-        function cancel(e) {
+        function cancelSubmit(e) {
             e.preventDefault();
             this.dispose();
         }
@@ -479,20 +485,10 @@ define(
          * @event
          * @param {mini-event.Event} e 事件参数
          */
-        function back(e) {
+        function backFromOpenedPage(e) {
             e.stopPropagation();
             e.preventDefault();
             this.hide();
-        }
-
-        /**
-         * 保留当前数据并退出
-         *
-         * @event
-         * @param {mini-event.Event} e 事件参数
-         */
-        function saveAndClose(e) {
-            e.target.hide();
         }
 
         /**
@@ -502,8 +498,8 @@ define(
          * @fires mvc.ListView#close
          * @param {mini-event.Event} e 事件参数
          */
-        function closeDrawerActionPanel(e) {
-            this.fire('close');
+        function closeOpenedPage(e) {
+            this.fire('closeopenedpage');
         }
 
         /**
@@ -592,6 +588,11 @@ define(
              };
              return this.waitConfirm(options);
         };
+
+        /** 新建表单页 */
+        eoo.defineAccessor(exports, 'createPageOpener');
+        /** 表内命令表单页 */
+        eoo.defineAccessor(exports, 'commandPageOpener');
 
         var BaseView = require('./BaseView');
         var ListView = require('eoo').create(BaseView, exports);
