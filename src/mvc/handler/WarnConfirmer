@@ -1,0 +1,69 @@
+/**
+ * UB RIA Base
+ * Copyright 2014 Baidu Inc. All rights reserved.
+ *
+ * @file Warn确认处理组件
+ * @author dddbear(dddbear@aliyun.com)
+ */
+define(
+    function (require) {
+        /**
+         * Warn确认处理组件
+         *
+         * @class mvc.handler.WarnConfirmer
+         */
+        var exports = {};
+
+        /**
+         * @override
+         */
+        exports.show = function (options) {
+            options.id = options.id || this.confirmerId;
+            var viewContext = options.viewContext;
+
+            var confirmer = viewContext.get(options.id);
+            if (confirmer) {
+                confirmer.hide();
+            }
+
+            // 根据配置，获取wrapper
+            options.wrapper = viewContext.get(this.wrapperId);
+
+            confirmer = require('warn').show(options);
+
+            // 容器的状态要变一下
+            var formViewContainer = viewContext.get('form-page');
+            formViewContainer.addState('warned');
+            
+            confirmer.on(
+                'ok',
+                function () {
+                    formViewContainer.removeState('warned');
+                    this.fire('ok');
+                }
+            );
+            confirmer.on(
+                'cancel',
+                function () {
+                    formViewContainer.removeState('warned');
+                    this.fire('cancel');
+                }
+            );
+            confirmer.on(
+                'hide',
+                function () {
+                    formViewContainer.removeState('warned');
+                    this.fire('hide');
+                }
+            );
+
+            this.confirmer = confirmer;
+
+            return this.confirmer;
+        };
+
+        var WarnConfirmer = require('eoo').create(require('./Confirmer'), exports);
+
+        return WarnConfirmer;
+    }
+);

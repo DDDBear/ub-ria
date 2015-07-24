@@ -162,7 +162,34 @@ define(
          * @return {er.Promise} 一个`Promise`对象，用户确认则进入`resolved`状态，用户取消则进入`rejected`状态
          */
         exports.waitCancelConfirm = function (options) {
-            return this.waitConfirmForType(options, 'cancel');
+            // 加viewContext
+            if (!options.viewContext) {
+                options.viewContext = this.viewContext;
+            }
+
+            var okLabel = '取消' + options.title;
+            var cancelLabel = '继续' + options.title;
+
+            var extendedOptions = {
+                id: 'form-confirm',
+                okLabel: okLabel,
+                cancelLabel: cancelLabel
+            };
+            u.extend(options, extendedOptions);
+
+            cancelConfirmer = this.getCancelConfirmer().show(options);
+
+            var Promise = require('promise');
+            var executor = function (resolve, reject) {
+                cancelConfirmer.on(
+                    'ok',
+                    function () {
+                        resolve();
+                    }
+                );
+            };
+
+            return new Promise(executor);
         };
 
         /**
@@ -176,84 +203,6 @@ define(
             return require('promise').resolve();
         };
 
-        /**
-         * 等待用户确认操作
-         *
-         * @method mvc.FormView#waitConfirmForType
-         * @param {Object} options 配置项
-         * @param {string} type 操作类型
-         * @return {er.Promise} 一个`Promise`对象，用户确认则进入`resolved`状态，用户取消则进入`rejected`状态
-         */
-        exports.waitConfirmForType = function (options, type) {
-            // 加viewContext
-            if (!options.viewContext) {
-                options.viewContext = this.viewContext;
-            }
-
-            var okLabel = '取消' + options.title;
-            var cancelLabel = '继续' + options.title;
-            if (type === 'update') {
-                okLabel = '确认修改';
-                cancelLabel = '取消修改';
-            }
-
-            var warn = this.get('form-' + type + '-confirm');
-            if (warn) {
-                warn.hide();
-            }
-
-            var wrapper = this.get('submit-section');
-            var extendedOptions = {
-                wrapper: wrapper,
-                id: 'form-' + type + '-confirm',
-                okLabel: okLabel,
-                cancelLabel: cancelLabel
-            };
-            u.extend(options, extendedOptions);
-
-            warn = require('../ui/Warn').show(options);
-
-            // 容器的状态要变一下
-            var formViewContainer = this.get('form-page');
-            formViewContainer.addState('warned');
-
-            // 点击表单编辑区也会关闭
-            var formContent = this.get('form-content-main');
-            formContent.on(
-                'command',
-                function (e) {
-                    if (e.name === 'form-content-click') {
-                        warn.hide();
-                    }
-                },
-                this
-            );
-
-            var Promise = require('promise');
-            var executor = function (resolve, reject) {
-                warn.on(
-                    'ok',
-                    function () {
-                        resolve();
-                        formViewContainer.removeState('warned');
-                    }
-                );
-                warn.on(
-                    'cancel',
-                    function () {
-                        formViewContainer.removeState('warned');
-                    }
-                );
-                warn.on(
-                    'hide',
-                    function () {
-                        formViewContainer.removeState('warned');
-                    }
-                );
-            };
-
-            return new Promise(executor);
-        };
 
         /**
          * 禁用提交操作

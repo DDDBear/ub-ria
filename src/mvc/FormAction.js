@@ -219,8 +219,7 @@ define(
         exports.cancelEdit = function () {
             // 从model中拿出表单最初数据，判断是否被更改
             var initialFormData = this.model.get('initialFormData');
-
-            if (this.isFormDataChanged(initialFormData)) {
+            if (this.needCancelCheck && this.isFormDataChanged(initialFormData)) {
                 var options = {
                     title: this.getCancelConfirmTitle(),
                     content: this.getCancelConfirmMessage()
